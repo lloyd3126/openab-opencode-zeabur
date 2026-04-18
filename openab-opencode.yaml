@@ -43,7 +43,9 @@ spec:
 
         - 以 `ghcr.io/openabdev/openab-opencode:0.7.7` 為基礎的 Discord Bot 服務
         - 掛載在 `/home/node` 的持久化儲存，保存 OpenCode 登入狀態、OpenAB 設定與工作檔案
-        - 可選的 `OPENCODE_MODEL`，啟動時會自動同步到 `/home/node/opencode.json`
+        - 可選的 `OPENCODE_MODEL`，啟動時會自動同步到 `/home/node/workspace/opencode.json`
+        - 首次啟動時會建立 `/home/node/workspace` 與 `AGENTS.md`、`TOOLS.md`、`USER.md`、`IDENTITY.md`、`SOUL.md`
+        - `TOOLS.md`、`USER.md`、`IDENTITY.md`、`SOUL.md` 會透過 `opencode.json` 的 `instructions` 載入
         - 已預裝 `gh`，方便代理在容器內操作 GitHub
 
         ## 部署前準備
@@ -84,12 +86,12 @@ spec:
 
         完成供應商登入流程後，重新啟動服務一次。
 
-        如果之後想改預設模型，直接更新 `OPENCODE_MODEL` 並重啟 service 即可。模板會在啟動時自動同步 `/home/node/opencode.json`。
+        如果之後想改預設模型，直接更新 `OPENCODE_MODEL` 並重啟 service 即可。模板會在啟動時自動同步 `/home/node/workspace/opencode.json`，並保留 workspace 規則檔的 `instructions` 設定。
 
         如果你要手動覆寫：
 
         ```bash
-        echo '{"$schema":"https://opencode.ai/config.json","model":"ollama-cloud/gemini-3-flash-preview"}' > /home/node/opencode.json
+        echo '{"$schema":"https://opencode.ai/config.json","model":"ollama-cloud/gemini-3-flash-preview"}' > /home/node/workspace/opencode.json
         ```
 
         修改後請重新啟動服務。
@@ -98,6 +100,7 @@ spec:
 
         - 在允許的 Discord 頻道中 @ 機器人開始對話
         - 後續對話會在 Bot 建立的 thread 中持續進行
+        - Agent 會以 `/home/node/workspace` 作為工作目錄，並讀取其中的工作區檔案
         - 可在容器內執行 `opencode models` 查看已登入供應商可用的模型
 
         ## 持久化檔案
@@ -105,7 +108,12 @@ spec:
         | 檔案 | 用途 |
         |------|------|
         | `/home/node/.config/openab/config.toml` | 首次啟動時生成的 OpenAB 執行設定 |
-        | `/home/node/opencode.json` | OpenCode 的專案設定，包含預設模型 |
+        | `/home/node/workspace/opencode.json` | OpenCode 的專案設定，包含預設模型與 `instructions` 載入清單 |
+        | `/home/node/workspace/AGENTS.md` | 工作區主規則，定義 agent 在這個專案中的工作方式 |
+        | `/home/node/workspace/TOOLS.md` | 本機工具、Zeabur 與 GitHub 操作相關的環境備註 |
+        | `/home/node/workspace/USER.md` | 使用者偏好與合作方式備註 |
+        | `/home/node/workspace/IDENTITY.md` | 這個 agent 的角色定位與身份描述 |
+        | `/home/node/workspace/SOUL.md` | 這個 agent 的語氣、價值觀與邊界設定 |
 
         如需重新生成 OpenAB 設定：
 
@@ -178,7 +186,9 @@ spec:
 
                     CONFIG_DIR=/home/node/.config/openab
                     CONFIG_FILE=$CONFIG_DIR/config.toml
+                    WORKSPACE_DIR=/home/node/workspace
                     mkdir -p "$CONFIG_DIR"
+                    mkdir -p "$WORKSPACE_DIR"
 
                     # Generate config.toml on first boot only.
                     # openab expands ${VAR} at runtime from process env.
@@ -201,19 +211,145 @@ spec:
                       echo "openab: using existing config.toml (delete to regenerate)"
                     fi
 
-                    if [ -n "$OPENCODE_MODEL" ]; then
-                      current_model=""
-                      if [ -f /home/node/opencode.json ]; then
-                        current_model=$(sed -n 's/.*"model"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' /home/node/opencode.json | head -n 1)
-                      fi
+                    if [ ! -f "$WORKSPACE_DIR/AGENTS.md" ]; then
+                      cat > "$WORKSPACE_DIR/AGENTS.md" <<'EOF'
+                    # AGENTS.md
 
-                      if [ ! -f /home/node/opencode.json ] || [ "$current_model" != "$OPENCODE_MODEL" ]; then
-                        printf '{\n  "$schema": "https://opencode.ai/config.json",\n  "model": "%s"\n}\n' "$OPENCODE_MODEL" > /home/node/opencode.json
-                        echo "openab: opencode.json synced from OPENCODE_MODEL"
-                      fi
+                    This workspace belongs to an OpenAB bot running on Zeabur with OpenCode as the ACP backend.
+
+                    ## Core Role
+
+                    You help maintain and operate this deployment through Discord conversations.
+                    Be practical, concise, and action-oriented.
+
+                    ## Workspace Rules
+
+                    - Prefer Traditional Chinese unless the user clearly asks for another language.
+                    - Treat this workspace as persistent operational context for the deployed bot.
+                    - When discussing Zeabur, GitHub, Discord, or OpenRouter settings, prefer exact names and concrete steps.
+                    - Before destructive actions, explain the impact and ask for confirmation.
+                    - Keep answers implementation-focused rather than abstract.
+
+                    ## Workspace Maintenance
+
+                    Maintain the following files when the information is durable and useful beyond the current reply.
+
+                    - Update `TOOLS.md` when you learn stable facts about the environment, deployment, integrations, file locations, commands, or operational workflows.
+                    - Update `USER.md` when you learn long-term user preferences such as language, communication style, recurring goals, or collaboration preferences.
+                    - Update `IDENTITY.md` only when the intended role or responsibility of this agent changes in a meaningful way.
+                    - Update `SOUL.md` only when the desired tone, values, or behavioral boundaries are explicitly refined.
+
+                    ## Update Rules
+
+                    - Do not update these files for temporary, situational, or low-confidence details.
+                    - Prefer small edits that preserve existing useful context.
+                    - If new information conflicts with older notes, replace the stale part instead of appending both versions.
+                    - Mention in your reply when you update one of these files.
+                    - If no durable knowledge was gained, leave the files unchanged.
+                    EOF
+                      echo "openab: workspace AGENTS.md created"
                     fi
 
-                    chown -R node:node "$CONFIG_DIR" /home/node/opencode.json 2>/dev/null || true
+                    if [ ! -f "$WORKSPACE_DIR/TOOLS.md" ]; then
+                      cat > "$WORKSPACE_DIR/TOOLS.md" <<'EOF'
+                    # TOOLS.md
+
+                    ## Local Environment Notes
+
+                    - Persistent home: `/home/node`
+                    - Workspace root: `/home/node/workspace`
+                    - OpenAB config: `/home/node/.config/openab/config.toml`
+                    - OpenCode config: `/home/node/opencode.json`
+                    - GitHub CLI: `gh`
+
+                    ## Deployment Notes
+
+                    - `OPENCODE_MODEL` is synced into `/home/node/opencode.json` on startup when set.
+                    - `OPENROUTER_API_KEY` can be provided through environment variables for `openrouter/...` models.
+                    - Zeabur environment variable changes require a service restart to take effect.
+                    EOF
+                      echo "openab: workspace TOOLS.md created"
+                    fi
+
+                    if [ ! -f "$WORKSPACE_DIR/USER.md" ]; then
+                      cat > "$WORKSPACE_DIR/USER.md" <<'EOF'
+                    # USER.md
+
+                    ## Maintainer Profile
+
+                    - Preferred language: Traditional Chinese
+                    - Typical tasks: Zeabur deployment, GitHub operations, Discord bot setup, model configuration
+                    - Preferred collaboration style: practical suggestions, direct answers, low ceremony
+                    EOF
+                      echo "openab: workspace USER.md created"
+                    fi
+
+                    if [ ! -f "$WORKSPACE_DIR/IDENTITY.md" ]; then
+                      cat > "$WORKSPACE_DIR/IDENTITY.md" <<'EOF'
+                    # IDENTITY.md
+
+                    You are the operational agent for this OpenAB deployment.
+                    Your job is to help manage the Discord bot environment, explain configuration clearly, and support ongoing maintenance.
+                    EOF
+                      echo "openab: workspace IDENTITY.md created"
+                    fi
+
+                    if [ ! -f "$WORKSPACE_DIR/SOUL.md" ]; then
+                      cat > "$WORKSPACE_DIR/SOUL.md" <<'EOF'
+                    # SOUL.md
+
+                    ## Style
+
+                    - Calm
+                    - Practical
+                    - Supportive
+                    - Precise
+
+                    ## Values
+
+                    - Prefer clarity over flourish.
+                    - Prefer correct operational guidance over guesswork.
+                    - Keep the bot useful for real deployment work.
+                    EOF
+                      echo "openab: workspace SOUL.md created"
+                    fi
+
+                    current_model=""
+                    needs_opencode_sync=0
+                    if [ -f /home/node/opencode.json ]; then
+                      current_model=$(sed -n 's/.*"model"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$WORKSPACE_DIR/opencode.json" | head -n 1)
+                      for instruction_file in TOOLS.md USER.md IDENTITY.md SOUL.md; do
+                        if ! grep -q "\"$instruction_file\"" "$WORKSPACE_DIR/opencode.json" 2>/dev/null; then
+                          needs_opencode_sync=1
+                        fi
+                      done
+                    else
+                      needs_opencode_sync=1
+                    fi
+
+                    if [ -n "$OPENCODE_MODEL" ] && [ "$current_model" != "$OPENCODE_MODEL" ]; then
+                      needs_opencode_sync=1
+                    fi
+
+                    if [ "$needs_opencode_sync" -eq 1 ]; then
+                      {
+                        printf '{\n'
+                        printf '  "$schema": "https://opencode.ai/config.json"'
+                        if [ -n "$OPENCODE_MODEL" ]; then
+                          printf ',\n  "model": "%s"' "$OPENCODE_MODEL"
+                        fi
+                        printf ',\n  "instructions": [\n'
+                        printf '    "TOOLS.md",\n'
+                        printf '    "USER.md",\n'
+                        printf '    "IDENTITY.md",\n'
+                        printf '    "SOUL.md"\n'
+                        printf '  ]\n'
+                        printf '}\n'
+                      } > "$WORKSPACE_DIR/opencode.json"
+                      echo "openab: opencode.json synced with workspace instructions"
+                    fi
+
+                    chown -R node:node "$CONFIG_DIR" "$WORKSPACE_DIR" "$WORKSPACE_DIR/opencode.json" 2>/dev/null || true
                     exec runuser -u node --preserve-environment -- openab run "$CONFIG_FILE"
                   permission: 493
                   envsubst: null
@@ -225,7 +361,7 @@ spec:
                     [agent]
                     command = "opencode"
                     args = ["acp"]
-                    working_dir = "/home/node"
+                    working_dir = "/home/node/workspace"
                   permission: null
                   envsubst: null
 localization:
@@ -263,7 +399,9 @@ localization:
 
             - A Discord bot service backed by `ghcr.io/openabdev/openab-opencode:0.7.7`
             - Persistent storage at `/home/node` for OpenCode auth, OpenAB config, and project files
-            - Optional startup sync from `OPENCODE_MODEL` into `/home/node/opencode.json`
+            - Optional startup sync from `OPENCODE_MODEL` into `/home/node/workspace/opencode.json`
+            - Automatic workspace scaffolding in `/home/node/workspace` with `AGENTS.md`, `TOOLS.md`, `USER.md`, `IDENTITY.md`, and `SOUL.md`
+            - `TOOLS.md`, `USER.md`, `IDENTITY.md`, and `SOUL.md` are loaded through `instructions` in `opencode.json`
             - `gh` preinstalled for GitHub workflows inside the agent environment
 
             ## Before You Deploy
@@ -304,12 +442,12 @@ localization:
 
             Finish the provider login flow, then restart the service once.
 
-            If you want to change the default model later, update `OPENCODE_MODEL` and restart the service. The template will sync `/home/node/opencode.json` automatically on startup.
+            If you want to change the default model later, update `OPENCODE_MODEL` and restart the service. The template will sync `/home/node/workspace/opencode.json` automatically on startup while keeping the workspace instruction references.
 
             If you prefer to override it manually:
 
             ```bash
-            echo '{"$schema":"https://opencode.ai/config.json","model":"ollama-cloud/gemini-3-flash-preview"}' > /home/node/opencode.json
+            echo '{"$schema":"https://opencode.ai/config.json","model":"ollama-cloud/gemini-3-flash-preview"}' > /home/node/workspace/opencode.json
             ```
 
             Restart the service after editing the file.
@@ -318,6 +456,7 @@ localization:
 
             - Mention the bot in an allowed Discord channel to start a conversation
             - Follow-up messages continue inside the created Discord thread
+            - The agent uses `/home/node/workspace` as its working directory and reads the workspace files stored there
             - Use `opencode models` in the container to inspect available models from authenticated providers
 
             ## Persistent Files
@@ -325,7 +464,12 @@ localization:
             | File | Purpose |
             |------|---------|
             | `/home/node/.config/openab/config.toml` | OpenAB runtime config generated on first boot |
-            | `/home/node/opencode.json` | OpenCode project-level config, including the default model |
+            | `/home/node/workspace/opencode.json` | OpenCode project-level config, including the default model and `instructions` list |
+            | `/home/node/workspace/AGENTS.md` | Main workspace instructions that define how the agent should operate |
+            | `/home/node/workspace/TOOLS.md` | Local notes about tools, Zeabur behavior, and GitHub workflows |
+            | `/home/node/workspace/USER.md` | Notes about the human maintainer and collaboration preferences |
+            | `/home/node/workspace/IDENTITY.md` | The agent's role and identity within this deployment |
+            | `/home/node/workspace/SOUL.md` | The agent's style, values, and boundaries |
 
             To regenerate the OpenAB config:
 

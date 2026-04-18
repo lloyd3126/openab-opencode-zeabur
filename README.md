@@ -11,6 +11,7 @@
 - 使用 `/home/node` 作為持久化儲存
 - 支援用 `OPENCODE_MODEL` 指定預設模型
 - 支援用 `OPENROUTER_API_KEY` 直接提供 OpenRouter 憑證
+- 會建立 OpenCode workspace 規則檔，並透過 `opencode.json` 載入額外 instructions
 
 ## 需要準備的東西
 
@@ -67,12 +68,17 @@
 1. 到 Zeabur 更新 `OPENCODE_MODEL`
 2. 重啟 service
 
-啟動時模板會自動把 `/home/node/opencode.json` 同步成新的 model，不需要再手動刪檔。
+啟動時模板會自動把 `/home/node/workspace/opencode.json` 同步成新的 model，不需要再手動刪檔。
 
 ## 持久化檔案
 
 - `/home/node/.config/openab/config.toml`：OpenAB 執行設定
-- `/home/node/opencode.json`：OpenCode 設定，包含預設模型
+- `/home/node/workspace/opencode.json`：OpenCode 設定，包含預設模型與 `instructions`
+- `/home/node/workspace/AGENTS.md`：主要專案級規則
+- `/home/node/workspace/TOOLS.md`：工具與環境備註
+- `/home/node/workspace/USER.md`：使用者偏好
+- `/home/node/workspace/IDENTITY.md`：agent 身份設定
+- `/home/node/workspace/SOUL.md`：agent 風格與價值觀
 
 如果要重建 OpenAB 設定，可以刪除：
 
@@ -81,6 +87,11 @@ rm /home/node/.config/openab/config.toml
 ```
 
 之後重啟 service 即可。
+
+其中規則的套用方式是：
+
+- `AGENTS.md`：由 OpenCode 當作專案級規則檔自動讀取
+- `TOOLS.md`、`USER.md`、`IDENTITY.md`、`SOUL.md`：由 `/home/node/opencode.json` 的 `instructions` 載入
 
 ## 常見情況
 
