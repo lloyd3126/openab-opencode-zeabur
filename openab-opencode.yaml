@@ -25,7 +25,7 @@ spec:
         - key: OPENCODE_MODEL
           type: STRING
           name: 預設 OpenCode 模型
-          description: '選填。首次啟動時會寫入 /home/node/opencode.json，格式為 provider/model，例如 ollama-cloud/gemini-3-flash-preview'
+          description: '選填。啟動時會同步到 /home/node/opencode.json，格式為 provider/model，例如 ollama-cloud/gemini-3-flash-preview'
     tags:
         - AI
         - Developer Tools
@@ -39,14 +39,21 @@ spec:
 
         - 以 `ghcr.io/openabdev/openab-opencode:0.7.7` 為基礎的 Discord Bot 服務
         - 掛載在 `/home/node` 的持久化儲存，保存 OpenCode 登入狀態、OpenAB 設定與工作檔案
-        - 可選的 `OPENCODE_MODEL`，首次啟動時自動生成 `/home/node/opencode.json`
+        - 可選的 `OPENCODE_MODEL`，啟動時會自動同步到 `/home/node/opencode.json`
         - 已預裝 `gh`，方便代理在容器內操作 GitHub
 
         ## 部署前準備
 
         1. 到 [Discord Developer Portal](https://discord.com/developers/applications) 建立 Discord Application 與 Bot
         2. 啟用 **Message Content Intent**
-        3. 用可傳訊、建串與讀取歷史訊息的權限邀請 Bot 進入伺服器
+        3. 邀請 Bot 進入伺服器，建議勾選這些權限：
+           - `檢視頻道`
+           - `傳送訊息`
+           - `建立公開討論串`
+           - `在討論串中傳送訊息`
+           - `讀取訊息歷史記錄`
+           - `新增反應`
+           - `管理訊息`
         4. 複製 Bot Token；若要限制頻道，再另外複製頻道 ID
 
         ## 部署方式
@@ -70,10 +77,12 @@ spec:
 
         完成供應商登入流程後，重新啟動服務一次。
 
-        如果之後想改預設模型：
+        如果之後想改預設模型，直接更新 `OPENCODE_MODEL` 並重啟 service 即可。模板會在啟動時自動同步 `/home/node/opencode.json`。
+
+        如果你要手動覆寫：
 
         ```bash
-        echo '{"model":"ollama-cloud/gemini-3-flash-preview"}' > /home/node/opencode.json
+        echo '{"$schema":"https://opencode.ai/config.json","model":"ollama-cloud/gemini-3-flash-preview"}' > /home/node/opencode.json
         ```
 
         修改後請重新啟動服務。
@@ -97,13 +106,7 @@ spec:
         rm /home/node/.config/openab/config.toml
         ```
 
-        如需從模板變數重新生成 OpenCode 模型檔：
-
-        ```bash
-        rm /home/node/opencode.json
-        ```
-
-        刪除後請重新啟動服務。
+        如果 `OPENCODE_MODEL` 有值，重啟時會自動把 `/home/node/opencode.json` 的 model 同步成該值。
 
         ## GitHub 驗證
 
@@ -189,9 +192,16 @@ spec:
                       echo "openab: using existing config.toml (delete to regenerate)"
                     fi
 
-                    if [ ! -f /home/node/opencode.json ] && [ -n "$OPENCODE_MODEL" ]; then
-                      printf '{\n  "model": "%s"\n}\n' "$OPENCODE_MODEL" > /home/node/opencode.json
-                      echo "openab: opencode.json generated from OPENCODE_MODEL"
+                    if [ -n "$OPENCODE_MODEL" ]; then
+                      current_model=""
+                      if [ -f /home/node/opencode.json ]; then
+                        current_model=$(sed -n 's/.*"model"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' /home/node/opencode.json | head -n 1)
+                      fi
+
+                      if [ ! -f /home/node/opencode.json ] || [ "$current_model" != "$OPENCODE_MODEL" ]; then
+                        printf '{\n  "$schema": "https://opencode.ai/config.json",\n  "model": "%s"\n}\n' "$OPENCODE_MODEL" > /home/node/opencode.json
+                        echo "openab: opencode.json synced from OPENCODE_MODEL"
+                      fi
                     fi
 
                     chown -R node:node "$CONFIG_DIR" /home/node/opencode.json 2>/dev/null || true
@@ -230,7 +240,7 @@ localization:
             - key: OPENCODE_MODEL
               type: STRING
               name: Default OpenCode Model
-              description: 'Optional. Provider/model format written to /home/node/opencode.json on first boot. Example: ollama-cloud/gemini-3-flash-preview'
+              description: 'Optional. Provider/model format synced to /home/node/opencode.json during startup. Example: ollama-cloud/gemini-3-flash-preview'
         readme: |
             # OpenAB OpenCode
 
@@ -240,14 +250,21 @@ localization:
 
             - A Discord bot service backed by `ghcr.io/openabdev/openab-opencode:0.7.7`
             - Persistent storage at `/home/node` for OpenCode auth, OpenAB config, and project files
-            - Optional first-boot generation of `/home/node/opencode.json` from `OPENCODE_MODEL`
+            - Optional startup sync from `OPENCODE_MODEL` into `/home/node/opencode.json`
             - `gh` preinstalled for GitHub workflows inside the agent environment
 
             ## Before You Deploy
 
             1. Create a Discord application and bot at [Discord Developer Portal](https://discord.com/developers/applications)
             2. Enable **Message Content Intent**
-            3. Invite the bot with permissions for sending messages, creating threads, and reading history
+            3. Invite the bot with these recommended permissions:
+               - `View Channels`
+               - `Send Messages`
+               - `Create Public Threads`
+               - `Send Messages in Threads`
+               - `Read Message History`
+               - `Add Reactions`
+               - `Manage Messages`
             4. Copy the bot token and, if needed, the channel IDs you want to restrict
 
             ## Deploy
@@ -271,10 +288,12 @@ localization:
 
             Finish the provider login flow, then restart the service once.
 
-            If you want to change the default model later:
+            If you want to change the default model later, update `OPENCODE_MODEL` and restart the service. The template will sync `/home/node/opencode.json` automatically on startup.
+
+            If you prefer to override it manually:
 
             ```bash
-            echo '{"model":"ollama-cloud/gemini-3-flash-preview"}' > /home/node/opencode.json
+            echo '{"$schema":"https://opencode.ai/config.json","model":"ollama-cloud/gemini-3-flash-preview"}' > /home/node/opencode.json
             ```
 
             Restart the service after editing the file.
@@ -298,13 +317,7 @@ localization:
             rm /home/node/.config/openab/config.toml
             ```
 
-            To regenerate the OpenCode model file from the template variable:
-
-            ```bash
-            rm /home/node/opencode.json
-            ```
-
-            Restart the service after deleting either file.
+            If `OPENCODE_MODEL` is set, startup will automatically sync the model in `/home/node/opencode.json`.
 
             ## GitHub Authentication
 
