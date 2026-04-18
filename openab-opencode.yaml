@@ -5,27 +5,27 @@ metadata:
     name: OpenAB OpenCode
 spec:
     description: |
-        Open Agent Broker — a lightweight Rust harness that bridges Discord to any ACP-compatible coding CLI (Claude Code, Codex, Gemini, Kiro, OpenCode) over stdio JSON-RPC.
-        Source: https://github.com/openabdev/openab
+        在 Zeabur 上部署以 OpenCode 為 ACP 後端的 OpenAB。
+        這個模板會把 Discord 機器人連到 OpenCode，並讓你在部署後用 OpenCode 登入想使用的模型供應商。
     coverImage: https://cdn-console.zeabur.com/f/Xp0H6/openab-cover.webp
     icon: https://cdn-console.zeabur.com/f/0Ewi6/openab-icon.webp
     variables:
         - key: DISCORD_BOT_TOKEN
           type: STRING
           name: Discord Bot Token
-          description: Token from https://discord.com/developers/applications
+          description: 從 Discord 開發者平台取得的機器人 Token。
         - key: OPENAB_ALLOWED_CHANNELS
           type: STRING
-          name: Discord Channel IDs (optional)
-          description: 'Optional. Comma-separated Discord channel IDs where the bot listens. Leave empty to allow all channels. Example: 123456789012345678,234567890123456789'
+          name: 允許的 Discord 頻道 ID
+          description: 選填。以逗號分隔可互動的頻道 ID；留空則允許所有頻道。
         - key: OPENAB_ALLOWED_USERS
           type: STRING
-          name: Discord User IDs (optional)
-          description: Optional. Comma-separated Discord user IDs allowed to interact with the bot. Leave empty to allow everyone in the allowed channels.
+          name: 允許的 Discord 使用者 ID
+          description: 選填。以逗號分隔可互動的使用者 ID；留空則允許頻道中的所有人。
         - key: OPENCODE_MODEL
           type: STRING
-          name: OpenCode Default Model (optional)
-          description: 'Optional. Provider/model format written to /home/node/opencode.json on first boot. Example: ollama-cloud/gemini-3-flash-preview'
+          name: 預設 OpenCode 模型
+          description: '選填。首次啟動時會寫入 /home/node/opencode.json，格式為 provider/model，例如 ollama-cloud/gemini-3-flash-preview'
     tags:
         - AI
         - Developer Tools
@@ -33,121 +33,86 @@ spec:
     readme: |
         # OpenAB OpenCode
 
-        [OpenAB](https://github.com/openabdev/openab) is a lightweight, open-source Rust harness that bridges Discord to any [Agent Client Protocol](https://github.com/anthropics/agent-protocol)-compatible coding CLI over stdio JSON-RPC.
+        這個模板會在 Zeabur 上部署 [OpenAB](https://github.com/openabdev/openab) 的 `openab-opencode` 映像。OpenAB 會透過 ACP 把 Discord 對話連到 [OpenCode](https://github.com/openabdev/openab/blob/main/docs/opencode.md)，你可以在部署後自行登入要使用的模型供應商。
 
-        This template deploys the OpenCode variant (`openab-opencode`) which talks to OpenCode via `opencode acp`.
+        ## 你會得到什麼
 
-        ## Important Notes
+        - 以 `ghcr.io/openabdev/openab-opencode:0.7.7` 為基礎的 Discord Bot 服務
+        - 掛載在 `/home/node` 的持久化儲存，保存 OpenCode 登入狀態、OpenAB 設定與工作檔案
+        - 可選的 `OPENCODE_MODEL`，首次啟動時自動生成 `/home/node/opencode.json`
+        - 已預裝 `gh`，方便代理在容器內操作 GitHub
 
-        - **Image tag:** This template pins `ghcr.io/openabdev/openab-opencode:0.7.7`. To upgrade, change the image tag in Zeabur Dashboard → Service → Settings. Available tags: [GitHub Packages](https://github.com/openabdev/openab/pkgs/container/openab-opencode).
-        - **Persistent storage:** `/home/node` is mounted as a persistent volume. OpenCode auth state, model config, and OpenAB config survive restarts.
-        - **Provider auth:** OpenCode uses its own provider login flow (`opencode auth login`). No backend-specific API token is required at deploy time.
-        - **First-boot config generation:** `config.toml` is generated only on first boot. If `OPENCODE_MODEL` is set, `/home/node/opencode.json` is also generated only on first boot.
+        ## 部署前準備
 
-        ## Setup
+        1. 到 [Discord Developer Portal](https://discord.com/developers/applications) 建立 Discord Application 與 Bot
+        2. 啟用 **Message Content Intent**
+        3. 用可傳訊、建串與讀取歷史訊息的權限邀請 Bot 進入伺服器
+        4. 複製 Bot Token；若要限制頻道，再另外複製頻道 ID
 
-        ### 1. Get a Discord Bot Token
+        ## 部署方式
 
-        1. Go to https://discord.com/developers/applications and click **New Application**
-        2. Navigate to **Bot** tab → click **Reset Token** → copy the token
-        3. On the same page, scroll down and enable **Message Content Intent** under Privileged Gateway Intents
-        4. Go to **OAuth2 → URL Generator** → check scope `bot` → check permissions: Send Messages, Send Messages in Threads, Create Public Threads, Read Message History, Add Reactions, Manage Messages
-        5. Copy the generated URL and open it in your browser to invite the bot to your server
+        請填入：
 
-        ### 2. Get Discord Channel IDs (optional)
+        - `DISCORD_BOT_TOKEN`：必填
+        - `OPENAB_ALLOWED_CHANNELS`：選填
+        - `OPENAB_ALLOWED_USERS`：選填
+        - `OPENCODE_MODEL`：選填，格式為 `provider/model`
 
-        1. Open Discord → go to **User Settings** (gear icon) → **Advanced** → enable **Developer Mode**
-        2. Right-click the channel where you want the bot to respond → **Copy Channel ID**
-        3. For multiple channels, separate IDs with commas: `123456789012345678,234567890123456789`
+        如果 `DISCORD_BOT_TOKEN` 留空，服務會進入睡眠而不會直接崩潰。
 
-        ### 3. Deploy
+        ## 部署後設定
 
-        Fill in `Discord Bot Token`, then optionally set `Discord Channel IDs`, `Discord User IDs`, and `OpenCode Default Model`.
-
-        The service connects to Discord automatically after startup.
-
-        ### 4. Authenticate OpenCode
-
-        Open Zeabur Terminal for the service and run:
+        在 Zeabur 的 Terminal 中執行：
 
         ```bash
         opencode auth login
         ```
 
-        Choose the provider you want to use and complete the login flow in your browser if prompted. After successful login, restart the service once from Zeabur Dashboard.
+        完成供應商登入流程後，重新啟動服務一次。
 
-        ### 5. Optional: set or change the default model later
-
-        OpenCode reads `/home/node/opencode.json` from the working directory. If you did not set `OpenCode Default Model` during deploy, create the file manually:
+        如果之後想改預設模型：
 
         ```bash
         echo '{"model":"ollama-cloud/gemini-3-flash-preview"}' > /home/node/opencode.json
         ```
 
-        Then restart the service.
+        修改後請重新啟動服務。
 
-        ## Usage
+        ## 使用方式
 
-        - **@mention the bot** in an allowed channel to start a conversation
-        - OpenAB creates a **thread** for multi-turn conversations — no @mention needed for follow-ups
-        - Each thread maps to a persistent OpenAB session
+        - 在允許的 Discord 頻道中 @ 機器人開始對話
+        - 後續對話會在 Bot 建立的 thread 中持續進行
+        - 可在容器內執行 `opencode models` 查看已登入供應商可用的模型
 
-        ## Providers
+        ## 持久化檔案
 
-        OpenCode supports multiple providers via `opencode auth login`, including:
+        | 檔案 | 用途 |
+        |------|------|
+        | `/home/node/.config/openab/config.toml` | 首次啟動時生成的 OpenAB 執行設定 |
+        | `/home/node/opencode.json` | OpenCode 的專案設定，包含預設模型 |
 
-        - **Ollama Cloud**
-        - **OpenCode Zen / Go**
-        - **OpenAI, Anthropic, AWS Bedrock, GitHub Copilot, Groq, OpenRouter**
-
-        To list models available from your configured providers:
-
-        ```bash
-        opencode models
-        ```
-
-        ## GitHub Integration (Optional)
-
-        The image includes `gh` (GitHub CLI), so the agent can review PRs, create issues, comment, merge, and more. Since the container is headless, authentication uses device flow:
-
-        1. Ask the bot in Discord: **"log in to GitHub"**
-        2. The bot will reply with a one-time code and a URL (for example `https://github.com/login/device`)
-        3. Open the URL on your phone or computer, enter the code, and authorize
-        4. The bot confirms login — `gh` is now authenticated for that environment
-
-        See [gh-auth-device-flow.md](https://github.com/openabdev/openab/blob/main/docs/gh-auth-device-flow.md) for technical details.
-
-        ## Customization
-
-        | File | Description |
-        |------|-------------|
-        | `/home/node/opencode.json` | OpenCode project-level config, including default model selection |
-        | `/home/node/.config/openab/config.toml` | OpenAB config (sessions, reactions, STT, etc.) |
-
-        `config.toml` is created from a built-in template on first boot. After that, edit the file directly. To reset to defaults, delete the file and restart:
+        如需重新生成 OpenAB 設定：
 
         ```bash
         rm /home/node/.config/openab/config.toml
         ```
 
-        If `/home/node/opencode.json` was generated from `OPENCODE_MODEL`, later env var changes will not overwrite it. To regenerate the file from the template setting, delete it and restart:
+        如需從模板變數重新生成 OpenCode 模型檔：
 
         ```bash
         rm /home/node/opencode.json
         ```
 
-        For config options, see the [OpenAB documentation](https://github.com/openabdev/openab) and [OpenCode guide](https://github.com/openabdev/openab/blob/main/docs/opencode.md).
+        刪除後請重新啟動服務。
 
-        ## Disabling
+        ## GitHub 驗證
 
-        Leave `Discord Bot Token` empty. The service sleeps instead of crashing.
+        映像內已包含 GitHub CLI。你可以在 Discord 中要求 Bot 登入 GitHub，並完成回覆中的 device flow。
 
-        ## Links
+        ## 授權與歸屬
 
-        - [OpenAB GitHub](https://github.com/openabdev/openab)
-        - [OpenCode guide](https://github.com/openabdev/openab/blob/main/docs/opencode.md)
-        - [OpenCode providers](https://opencode.ai/docs/providers/)
-        - [Agent Client Protocol](https://github.com/anthropics/agent-protocol)
+        OpenAB 由 [openabdev/openab](https://github.com/openabdev/openab) 維護，使用 [MIT License](https://github.com/openabdev/openab/blob/main/LICENSE) 發佈。
+        本模板中的 OpenCode 設定方式依據官方 [OpenCode guide](https://github.com/openabdev/openab/blob/main/docs/opencode.md) 整理。
     resourceRequirement:
         minConfig:
             cpu: 2
@@ -203,13 +168,11 @@ spec:
                     CONFIG_FILE=$CONFIG_DIR/config.toml
                     mkdir -p "$CONFIG_DIR"
 
-                    # Generate config.toml on first boot only
-                    # openab expands ${VAR} at runtime from process env
-                    # To regenerate, delete the file and restart
+                    # Generate config.toml on first boot only.
+                    # openab expands ${VAR} at runtime from process env.
                     if [ ! -f "$CONFIG_FILE" ]; then
                       cp /opt/config.toml.template "$CONFIG_FILE"
 
-                      # Append allowed_channels/users if provided
                       if [ -n "$OPENAB_ALLOWED_CHANNELS" ]; then
                         IFS=','; channels=""; for id in $OPENAB_ALLOWED_CHANNELS; do
                           id=$(echo "$id" | tr -d ' '); [ -n "$id" ] && channels="${channels}\"${id}\","; done; unset IFS
@@ -246,3 +209,108 @@ spec:
                     working_dir = "/home/node"
                   permission: null
                   envsubst: null
+localization:
+    en-US:
+        description: |
+            Deploy OpenAB with OpenCode as the ACP backend on Zeabur.
+            This template connects a Discord bot to OpenCode and lets you choose your own LLM provider through OpenCode auth.
+        variables:
+            - key: DISCORD_BOT_TOKEN
+              type: STRING
+              name: Discord Bot Token
+              description: Token from the Discord Developer Portal for your bot application.
+            - key: OPENAB_ALLOWED_CHANNELS
+              type: STRING
+              name: Allowed Discord Channel IDs
+              description: Optional. Comma-separated channel IDs that the bot is allowed to listen in. Leave empty to allow all channels.
+            - key: OPENAB_ALLOWED_USERS
+              type: STRING
+              name: Allowed Discord User IDs
+              description: Optional. Comma-separated user IDs that can interact with the bot. Leave empty to allow everyone in allowed channels.
+            - key: OPENCODE_MODEL
+              type: STRING
+              name: Default OpenCode Model
+              description: 'Optional. Provider/model format written to /home/node/opencode.json on first boot. Example: ollama-cloud/gemini-3-flash-preview'
+        readme: |
+            # OpenAB OpenCode
+
+            This template deploys [OpenAB](https://github.com/openabdev/openab) with the `openab-opencode` image on Zeabur. OpenAB connects Discord conversations to [OpenCode](https://github.com/openabdev/openab/blob/main/docs/opencode.md) through ACP, so you can authenticate the provider you want after deployment.
+
+            ## What You Get
+
+            - A Discord bot service backed by `ghcr.io/openabdev/openab-opencode:0.7.7`
+            - Persistent storage at `/home/node` for OpenCode auth, OpenAB config, and project files
+            - Optional first-boot generation of `/home/node/opencode.json` from `OPENCODE_MODEL`
+            - `gh` preinstalled for GitHub workflows inside the agent environment
+
+            ## Before You Deploy
+
+            1. Create a Discord application and bot at [Discord Developer Portal](https://discord.com/developers/applications)
+            2. Enable **Message Content Intent**
+            3. Invite the bot with permissions for sending messages, creating threads, and reading history
+            4. Copy the bot token and, if needed, the channel IDs you want to restrict
+
+            ## Deploy
+
+            Fill in:
+
+            - `DISCORD_BOT_TOKEN`: required
+            - `OPENAB_ALLOWED_CHANNELS`: optional
+            - `OPENAB_ALLOWED_USERS`: optional
+            - `OPENCODE_MODEL`: optional default model in `provider/model` format
+
+            If `DISCORD_BOT_TOKEN` is empty, the service stays asleep instead of crashing.
+
+            ## After Deployment
+
+            Open the Zeabur terminal for the service and run:
+
+            ```bash
+            opencode auth login
+            ```
+
+            Finish the provider login flow, then restart the service once.
+
+            If you want to change the default model later:
+
+            ```bash
+            echo '{"model":"ollama-cloud/gemini-3-flash-preview"}' > /home/node/opencode.json
+            ```
+
+            Restart the service after editing the file.
+
+            ## Usage
+
+            - Mention the bot in an allowed Discord channel to start a conversation
+            - Follow-up messages continue inside the created Discord thread
+            - Use `opencode models` in the container to inspect available models from authenticated providers
+
+            ## Persistent Files
+
+            | File | Purpose |
+            |------|---------|
+            | `/home/node/.config/openab/config.toml` | OpenAB runtime config generated on first boot |
+            | `/home/node/opencode.json` | OpenCode project-level config, including the default model |
+
+            To regenerate the OpenAB config:
+
+            ```bash
+            rm /home/node/.config/openab/config.toml
+            ```
+
+            To regenerate the OpenCode model file from the template variable:
+
+            ```bash
+            rm /home/node/opencode.json
+            ```
+
+            Restart the service after deleting either file.
+
+            ## GitHub Authentication
+
+            The image includes GitHub CLI. In Discord, ask the bot to log in to GitHub and complete the device flow shown in the reply.
+
+            ## License And Attribution
+
+            OpenAB is maintained by [openabdev/openab](https://github.com/openabdev/openab) and distributed under the [MIT License](https://github.com/openabdev/openab/blob/main/LICENSE).
+            OpenCode setup guidance in this template is based on the official [OpenCode guide](https://github.com/openabdev/openab/blob/main/docs/opencode.md).
