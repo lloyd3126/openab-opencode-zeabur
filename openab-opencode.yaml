@@ -26,6 +26,10 @@ spec:
           type: STRING
           name: 預設 OpenCode 模型
           description: '選填。啟動時會同步到 /home/node/opencode.json，格式為 provider/model，例如 ollama-cloud/gemini-3-flash-preview'
+        - key: OPENROUTER_API_KEY
+          type: STRING
+          name: OpenRouter API Key
+          description: 選填。若使用 OpenRouter 模型，可直接填入 API key，讓 OpenCode 在啟動時自動讀取，不需要手動登入。
     tags:
         - AI
         - Developer Tools
@@ -64,10 +68,13 @@ spec:
         - `OPENAB_ALLOWED_CHANNELS`：選填
         - `OPENAB_ALLOWED_USERS`：選填
         - `OPENCODE_MODEL`：選填，格式為 `provider/model`
+        - `OPENROUTER_API_KEY`：選填，若模型是 `openrouter/...` 建議一併填入
 
         如果 `DISCORD_BOT_TOKEN` 留空，服務會進入睡眠而不會直接崩潰。
 
         ## 部署後設定
+
+        如果你使用的是 `openrouter/...` 模型，而且已填入 `OPENROUTER_API_KEY`，通常不需要再手動執行 provider 登入。
 
         在 Zeabur 的 Terminal 中執行：
 
@@ -147,6 +154,8 @@ spec:
                     default: ${OPENAB_ALLOWED_USERS}
                 OPENCODE_MODEL:
                     default: ${OPENCODE_MODEL}
+                OPENROUTER_API_KEY:
+                    default: ${OPENROUTER_API_KEY}
             configs:
                 - path: /opt/start-openab.sh
                   template: |
@@ -241,6 +250,10 @@ localization:
               type: STRING
               name: Default OpenCode Model
               description: 'Optional. Provider/model format synced to /home/node/opencode.json during startup. Example: ollama-cloud/gemini-3-flash-preview'
+            - key: OPENROUTER_API_KEY
+              type: STRING
+              name: OpenRouter API Key
+              description: Optional. If you use an `openrouter/...` model, provide the API key so OpenCode can load it from environment variables without manual login.
         readme: |
             # OpenAB OpenCode
 
@@ -275,10 +288,13 @@ localization:
             - `OPENAB_ALLOWED_CHANNELS`: optional
             - `OPENAB_ALLOWED_USERS`: optional
             - `OPENCODE_MODEL`: optional default model in `provider/model` format
+            - `OPENROUTER_API_KEY`: optional but recommended for `openrouter/...` models
 
             If `DISCORD_BOT_TOKEN` is empty, the service stays asleep instead of crashing.
 
             ## After Deployment
+
+            If you are using an `openrouter/...` model and have already set `OPENROUTER_API_KEY`, you usually do not need to run manual provider login.
 
             Open the Zeabur terminal for the service and run:
 
